@@ -226,7 +226,7 @@ app.get("/vehicles", requireLogin, (req, res) => {
 });
 
 app.post("/vehicles/add", requireLogin, requireRole("fleet_manager"), (req, res) => {
-  const { regNumber, name, type, maxLoad, odometer, acquisitionCost } = req.body;
+  const { regNumber, name, type, region, maxLoad, odometer, acquisitionCost } = req.body;
 
   if (db.get("vehicles").find({ regNumber }).value()) {
     setFlash(req, "danger", "Registration number must be unique.");
@@ -239,6 +239,7 @@ app.post("/vehicles/add", requireLogin, requireRole("fleet_manager"), (req, res)
       regNumber,
       name,
       type,
+      region: (region || "").trim(),
       maxLoad: parseFloat(maxLoad),
       odometer: parseFloat(odometer) || 0,
       acquisitionCost: parseFloat(acquisitionCost) || 0,
@@ -247,6 +248,66 @@ app.post("/vehicles/add", requireLogin, requireRole("fleet_manager"), (req, res)
     .write();
 
   setFlash(req, "success", "Vehicle registered.");
+  res.redirect("/vehicles");
+});
+
+app.post("/vehicles/:id/edit", requireLogin, requireRole("fleet_manager"), (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const vehicle = db.get("vehicles").find({ id }).value();
+  const { name, type, region, maxLoad, odometer, acquisitionCost } = req.body;
+  const parsedMaxLoad = parseFloat(maxLoad);
+  const parsedOdometer = parseFloat(odometer);
+  const parsedAcquisitionCost = parseFloat(acquisitionCost);
+
+  if (!vehicle) {
+    setFlash(req, "danger", "Vehicle not found.");
+    return res.redirect("/vehicles");
+  }
+
+  if (!name?.trim() || !type?.trim() || !Number.isFinite(parsedMaxLoad) || parsedMaxLoad <= 0) {
+    setFlash(req, "danger", "Enter a vehicle name, type, and a valid load capacity.");
+    return res.redirect("/vehicles");
+  }
+
+  if ((odometer && (!Number.isFinite(parsedOdometer) || parsedOdometer < vehicle.odometer)) ||
+      (acquisitionCost && (!Number.isFinite(parsedAcquisitionCost) || parsedAcquisitionCost < 0))) {
+    setFlash(req, "danger", "Odometer cannot decrease and acquisition cost cannot be negative.");
+    return res.redirect("/vehicles");
+  }
+
+  db.get("vehicles")
+    .find({ id })
+    .assign({
+      name: name.trim(),
+      type: type.trim(),
+      region: (region || "").trim(),
+      maxLoad: parsedMaxLoad,
+      odometer: Number.isFinite(parsedOdometer) ? parsedOdometer : vehicle.odometer,
+      acquisitionCost: Number.isFinite(parsedAcquisitionCost) ? parsedAcquisitionCost : vehicle.acquisitionCost,
+    })
+    .write();
+
+  setFlash(req, "success", "Vehicle details updated.");
+  res.redirect("/vehicles");
+});
+
+app.post("/vehicles/:id/retire", requireLogin, requireRole("fleet_manager"), (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const vehicle = db.get("vehicles").find({ id }).value();
+
+  if (!vehicle) {
+    setFlash(req, "danger", "Vehicle not found.");
+    return res.redirect("/vehicles");
+  }
+
+  if (vehicle.status === "On Trip" || vehicle.status === "In Shop") {
+    setFlash(req, "danger", `Cannot retire ${vehicle.regNumber} while it is ${vehicle.status.toLowerCase()}.`);
+    return res.redirect("/vehicles");
+  }
+
+  const newStatus = vehicle.status === "Retired" ? "Available" : "Retired";
+  db.get("vehicles").find({ id }).assign({ status: newStatus }).write();
+  setFlash(req, "success", `Vehicle status updated to ${newStatus}.`);
   res.redirect("/vehicles");
 });
 
