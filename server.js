@@ -142,14 +142,43 @@ app.get(
   "/dashboard",
   requireLogin,
   asyncRoute(async (req, res) => {
-    const [vehicleStats] = await query(`
+    // ---- filters from the querystring (?type=&status=&region=) ----
+    const selectedType = (req.query.type || "").trim();
+    const selectedStatus = (req.query.status || "").trim();
+    const selectedRegion = (req.query.region || "").trim();
+
+    const whereClauses = [];
+    const whereParams = [];
+    if (selectedType) {
+      whereClauses.push("type = ?");
+      whereParams.push(selectedType);
+    }
+    if (selectedStatus) {
+      whereClauses.push("status = ?");
+      whereParams.push(selectedStatus);
+    }
+    if (selectedRegion) {
+      whereClauses.push("region = ?");
+      whereParams.push(selectedRegion);
+    }
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+    // ---- vehicle KPIs + chart data, scoped to the current filters ----
+    const [vehicleStats] = await query(
+      `
       SELECT
         SUM(status != 'Retired') AS activeVehicles,
         SUM(status = 'Available') AS availableVehicles,
         SUM(status = 'In Shop') AS inMaintenance,
-        SUM(status = 'On Trip') AS onTripVehicles
+        SUM(status = 'On Trip') AS onTripVehicles,
+        SUM(status = 'Retired') AS retiredVehicles
       FROM vehicles
-    `);
+      ${whereSql}
+      `,
+      whereParams
+    );
+
+    // ---- trip / driver KPIs (not vehicle-filtered — no type/region concept there) ----
     const [tripStats] = await query(`
       SELECT
         SUM(status = 'Dispatched') AS activeTrips,
@@ -166,6 +195,65 @@ app.get(
       ? Math.round((onTripVehicles / activeVehicles) * 1000) / 10
       : 0;
 
+    // ---- distinct filter options for the dropdowns ----
+    const typeRows = await query("SELECT DISTINCT type FROM vehicles WHERE type IS NOT NULL ORDER BY type");
+    const regionRows = await query(
+      "SELECT DISTINCT region FROM vehicles WHERE region IS NOT NULL AND region != '' ORDER BY region"
+    );
+
+    const filters = {
+      types: typeRows.map((r) => r.type),
+      regions: regionRows.map((r) => r.region),
+      statuses: ["Available", "On Trip", "In Shop", "Retired"],
+      selectedType,
+      selectedStatus,
+      selectedRegion,
+    };
+
+    // ---- doughnut chart: fleet status breakdown, same filters applied ----
+    const chartData = {
+      labels: ["Available", "On Trip", "In Shop", "Retired"],
+      values: [
+        Number(vehicleStats.availableVehicles) || 0,
+        onTripVehicles,
+        Number(vehicleStats.inMaintenance) || 0,
+        Number(vehicleStats.retiredVehicles) || 0,
+      ],
+    };
+
+    // ---- attention required: expiring licenses + vehicles stuck in shop ----
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 30);
+    const soonStr = soon.toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const expiringDrivers = await query(
+      `SELECT id, name, license_expiry AS licenseExpiry FROM drivers
+       WHERE status != 'Suspended' AND license_expiry BETWEEN ? AND ?
+       ORDER BY license_expiry ASC LIMIT 5`,
+      [today, soonStr]
+    );
+    const inShopVehicles = await query(
+      `SELECT id, reg_number AS regNumber, name FROM vehicles WHERE status = 'In Shop' LIMIT 5`
+    );
+
+    const attentionItems = [
+      ...expiringDrivers.map((d) => ({
+        href: "/drivers",
+        level: "warning",
+        icon: "bi-person-badge",
+        title: `${d.name}'s license expires soon`,
+        detail: `Expires ${d.licenseExpiry}`,
+      })),
+      ...inShopVehicles.map((v) => ({
+        href: "/maintenance",
+        level: "info",
+        icon: "bi-tools",
+        title: `${v.regNumber} is in the shop`,
+        detail: v.name,
+      })),
+    ];
+
     res.render("dashboard", {
       kpis: {
         activeVehicles,
@@ -176,6 +264,9 @@ app.get(
         driversOnDuty: Number(driverStats.driversOnDuty) || 0,
         fleetUtilization,
       },
+      filters,
+      chartData,
+      attentionItems,
     });
   })
 );
