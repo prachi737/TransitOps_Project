@@ -38,7 +38,17 @@
       "maxLoad": 50,
       "odometer": 0,
       "acquisitionCost": 0,
-      "status": "Retired"
+      "status": "Available"
+    },
+    {
+      "id": 2,
+      "regNumber": "GJ27FZ4841",
+      "name": "FZ X",
+      "type": "2 wheel",
+      "maxLoad": 8,
+      "odometer": 200,
+      "acquisitionCost": 100,
+      "status": "Available"
     }
   ],
   "drivers": [],
@@ -48,7 +58,7 @@
   "expenses": [],
   "counters": {
     "users": 4,
-    "vehicles": 1,
+    "vehicles": 2,
     "drivers": 0,
     "trips": 0,
     "maintenanceLogs": 0,
