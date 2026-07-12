@@ -1,52 +1,202 @@
 <%- include('partials/header') %>
-<div class="login-container">
-  <div class="card card-custom login-card">
-    <div class="card-body p-5">
-      <div class="text-center mb-4">
-        <h2 class="fw-extrabold mb-1" style="background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">TransitOps</h2>
-        <p class="text-muted small">Smart Transport Operations Platform</p>
-      </div>
-      
-      <form method="POST" action="/login">
-        <div class="mb-3">
-          <label class="form-label text-muted small fw-semibold">Email Address</label>
-          <div class="input-group">
-            <span class="input-group-text bg-transparent border-secondary text-muted"><i class="bi bi-envelope"></i></span>
-            <input type="email" name="email" class="form-control form-control-custom" placeholder="name@transitops.com" required>
+
+<style>
+  .auth-shell {
+    min-height: calc(100vh - 64px);
+    display: grid;
+    align-items: center;
+    padding: 34px 0 52px;
+  }
+
+  .auth-panel {
+    overflow: hidden;
+    border: 0;
+    border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
+  }
+
+  .auth-brand {
+    min-height: 100%;
+    padding: 34px;
+    color: #fff;
+    background:
+      linear-gradient(135deg, rgba(8, 47, 73, 0.94), rgba(20, 83, 45, 0.9)),
+      url("https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=1100&q=80") center/cover;
+  }
+
+  .auth-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.16);
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .auth-brand h1 {
+    max-width: 420px;
+    margin-bottom: 14px;
+    font-size: 2.25rem;
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+
+  .auth-brand p {
+    max-width: 420px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .auth-metric {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+  }
+
+  .auth-metric span {
+    display: block;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .auth-form-wrap {
+    padding: 34px;
+    background: #fff;
+  }
+
+  .auth-kicker {
+    color: #0f766e;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .demo-box {
+    margin-top: 22px;
+    padding: 16px;
+    border: 1px solid #dbe4ea;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .demo-user {
+    padding: 10px;
+    border: 1px solid #e5edf2;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.84rem;
+  }
+
+  .demo-user strong,
+  .demo-user span {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .demo-user span {
+    color: #64748b;
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 767.98px) {
+    .auth-shell { padding-top: 18px; }
+    .auth-brand, .auth-form-wrap { padding: 24px; }
+    .auth-brand h1 { font-size: 1.8rem; }
+    .demo-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="auth-shell">
+  <div class="row justify-content-center">
+    <div class="col-xl-10 col-lg-11">
+      <div class="auth-panel">
+        <div class="row g-0">
+          <div class="col-lg-6">
+            <section class="auth-brand">
+              <div class="auth-brand-mark">TO</div>
+              <h1>TransitOps control tower</h1>
+              <p>Sign in to manage vehicles, drivers, trips, maintenance, fuel expenses, and role-based reports from one clean workspace.</p>
+              <div class="auth-metric">
+                <div>
+                  <strong>4 demo roles</strong>
+                  <span>Manager, driver, safety, finance</span>
+                </div>
+                <div>
+                  <strong>Live operations</strong>
+                  <span>Fleet records update instantly</span>
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
-        
-        <div class="mb-4">
-          <label class="form-label text-muted small fw-semibold">Password</label>
-          <div class="input-group">
-            <span class="input-group-text bg-transparent border-secondary text-muted"><i class="bi bi-lock"></i></span>
-            <input type="password" name="password" class="form-control form-control-custom" placeholder="••••••••" required>
+
+          <div class="col-lg-6">
+            <section class="auth-form-wrap">
+              <div class="auth-kicker mb-2">Welcome back</div>
+              <h2 class="h3 mb-2">Sign in to your account</h2>
+              <p class="text-muted mb-4">Use your TransitOps account or any demo profile below.</p>
+
+              <form method="POST" action="/login">
+                <div class="mb-3">
+                  <label class="form-label" for="email">Email address</label>
+                  <input type="email" id="email" name="email" class="form-control form-control-lg" placeholder="manager@transitops.com" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="password">Password</label>
+                  <input type="password" id="password" name="password" class="form-control form-control-lg" placeholder="password123" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100">Sign in</button>
+              </form>
+
+              <div class="d-flex align-items-center gap-2 my-4">
+                <hr class="flex-grow-1">
+                <span class="text-muted small">New here?</span>
+                <hr class="flex-grow-1">
+              </div>
+
+              <a href="/signup" class="btn btn-outline-dark w-100">Create a new account</a>
+
+              <div class="demo-box">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <strong>Demo credentials</strong>
+                  <code>password123</code>
+                </div>
+                <div class="demo-grid">
+                  <div class="demo-user">
+                    <strong>manager@transitops.com</strong>
+                    <span>Fleet Manager</span>
+                  </div>
+                  <div class="demo-user">
+                    <strong>driver@transitops.com</strong>
+                    <span>Driver</span>
+                  </div>
+                  <div class="demo-user">
+                    <strong>safety@transitops.com</strong>
+                    <span>Safety Officer</span>
+                  </div>
+                  <div class="demo-user">
+                    <strong>finance@transitops.com</strong>
+                    <span>Financial Analyst</span>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
-        
-        <button type="submit" class="btn btn-primary-custom w-100 py-2.5">
-          Sign In <i class="bi bi-arrow-right ms-1"></i>
-        </button>
-      </form>
-      
-      <div class="mt-4 pt-3 border-top border-secondary border-opacity-25">
-        <p class="text-muted small mb-2 fw-semibold"><i class="bi bi-shield-lock-fill text-warning me-1"></i> Demo Access Accounts:</p>
-        <div class="table-responsive">
-          <table class="table table-sm table-borderless text-muted small mb-0">
-            <tbody>
-              <tr><td><strong>Fleet Manager:</strong></td><td><code>manager@transitops.com</code></td></tr>
-              <tr><td><strong>Driver:</strong></td><td><code>driver@transitops.com</code></td></tr>
-              <tr><td><strong>Safety Officer:</strong></td><td><code>safety@transitops.com</code></td></tr>
-              <tr><td><strong>Financial Analyst:</strong></td><td><code>finance@transitops.com</code></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="text-center mt-2 text-warning small">
-          Password: <code>password123</code>
         </div>
       </div>
     </div>
   </div>
 </div>
-<%- include('partials/footer') %>
 
+<%- include('partials/footer') %>

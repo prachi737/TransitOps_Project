@@ -1,0 +1,161 @@
+<%- include('partials/header') %>
+
+<style>
+  .auth-shell {
+    min-height: calc(100vh - 64px);
+    display: grid;
+    align-items: center;
+    padding: 34px 0 52px;
+  }
+
+  .auth-panel {
+    overflow: hidden;
+    border: 0;
+    border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
+  }
+
+  .auth-brand {
+    min-height: 100%;
+    padding: 34px;
+    color: #fff;
+    background:
+      linear-gradient(135deg, rgba(22, 78, 99, 0.94), rgba(113, 63, 18, 0.86)),
+      url("https://images.unsplash.com/photo-1494412519320-aa613dfb7738?auto=format&fit=crop&w=1100&q=80") center/cover;
+  }
+
+  .auth-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.16);
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .auth-brand h1 {
+    max-width: 420px;
+    margin-bottom: 14px;
+    font-size: 2.25rem;
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+
+  .auth-brand p {
+    max-width: 420px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .auth-checklist {
+    display: grid;
+    gap: 10px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+  }
+
+  .auth-checklist span {
+    color: rgba(255, 255, 255, 0.84);
+  }
+
+  .auth-form-wrap {
+    padding: 34px;
+    background: #fff;
+  }
+
+  .auth-kicker {
+    color: #0f766e;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .role-help {
+    padding: 14px;
+    border: 1px solid #dbe4ea;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 767.98px) {
+    .auth-shell { padding-top: 18px; }
+    .auth-brand, .auth-form-wrap { padding: 24px; }
+    .auth-brand h1 { font-size: 1.8rem; }
+  }
+</style>
+
+<div class="auth-shell">
+  <div class="row justify-content-center">
+    <div class="col-xl-10 col-lg-11">
+      <div class="auth-panel">
+        <div class="row g-0">
+          <div class="col-lg-6 order-lg-2">
+            <section class="auth-brand">
+              <div class="auth-brand-mark">TO</div>
+              <h1>Create your operations account</h1>
+              <p>Choose the role that matches your work and TransitOps will take you straight into the dashboard after signup.</p>
+              <div class="auth-checklist">
+                <span>Role-aware menus and permissions</span>
+                <span>Secure password hashing</span>
+                <span>Ready for fleet, driver, safety, and finance workflows</span>
+              </div>
+            </section>
+          </div>
+
+          <div class="col-lg-6 order-lg-1">
+            <section class="auth-form-wrap">
+              <div class="auth-kicker mb-2">Get started</div>
+              <h2 class="h3 mb-2">Sign up for TransitOps</h2>
+              <p class="text-muted mb-4">Create a local demo account for this transport operations workspace.</p>
+
+              <form method="POST" action="/signup">
+                <div class="mb-3">
+                  <label class="form-label" for="name">Full name</label>
+                  <input type="text" id="name" name="name" class="form-control form-control-lg" placeholder="Aarav Sharma" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="email">Email address</label>
+                  <input type="email" id="email" name="email" class="form-control form-control-lg" placeholder="you@company.com" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="role">Account role</label>
+                  <select id="role" name="role" class="form-select form-select-lg" required>
+                    <option value="fleet_manager">Fleet Manager</option>
+                    <option value="driver">Driver</option>
+                    <option value="safety_officer">Safety Officer</option>
+                    <option value="financial_analyst">Financial Analyst</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="password">Password</label>
+                  <input type="password" id="password" name="password" class="form-control form-control-lg" minlength="6" placeholder="At least 6 characters" required>
+                </div>
+                <div class="role-help mb-4">
+                  Managers can access fleet setup, while safety and finance roles unlock their focused workflows.
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100">Create account</button>
+              </form>
+
+              <div class="d-flex align-items-center gap-2 my-4">
+                <hr class="flex-grow-1">
+                <span class="text-muted small">Already registered?</span>
+                <hr class="flex-grow-1">
+              </div>
+
+              <a href="/login" class="btn btn-outline-dark w-100">Back to sign in</a>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
 const { db, nextId, seed } = require("./db");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -58,11 +58,13 @@ function setFlash(req, type, msg) {
 app.get("/", (req, res) => res.redirect("/dashboard"));
 
 app.get("/login", (req, res) => {
+  if (req.session.user) return res.redirect("/dashboard");
   res.render("login");
 });
 
 app.post("/login", (req, res) => {
-  const { email, password } = req.body;
+  const email = (req.body.email || "").trim().toLowerCase();
+  const { password } = req.body;
   const user = db.get("users").find({ email }).value();
 
   if (user && bcrypt.compareSync(password, user.passwordHash)) {
@@ -71,6 +73,42 @@ app.post("/login", (req, res) => {
   }
   setFlash(req, "danger", "Invalid email or password.");
   res.redirect("/login");
+});
+
+app.get("/signup", (req, res) => {
+  if (req.session.user) return res.redirect("/dashboard");
+  res.render("signup");
+});
+
+app.post("/signup", (req, res) => {
+  const name = (req.body.name || "").trim();
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = req.body.password || "";
+  const role = req.body.role || "driver";
+  const allowedRoles = ["fleet_manager", "driver", "safety_officer", "financial_analyst"];
+
+  if (!name || !email || password.length < 6 || !allowedRoles.includes(role)) {
+    setFlash(req, "danger", "Please enter a valid name, email, role, and a password with at least 6 characters.");
+    return res.redirect("/signup");
+  }
+
+  const existingUser = db.get("users").find({ email }).value();
+  if (existingUser) {
+    setFlash(req, "danger", "An account with that email already exists.");
+    return res.redirect("/signup");
+  }
+
+  const user = {
+    id: nextId("users"),
+    email,
+    name,
+    role,
+    passwordHash: bcrypt.hashSync(password, 10),
+  };
+
+  db.get("users").push(user).write();
+  req.session.user = { id: user.id, name: user.name, role: user.role, email: user.email };
+  res.redirect("/dashboard");
 });
 
 app.get("/logout", (req, res) => {
@@ -85,36 +123,12 @@ app.get("/dashboard", requireLogin, (req, res) => {
   const drivers = db.get("drivers").value();
   const trips = db.get("trips").value();
 
-  // Extract unique filters from db
-  const allTypes = [...new Set(vehicles.map((v) => v.type).filter(Boolean))];
-  const allRegions = [...new Set(vehicles.map((v) => v.region).filter(Boolean))];
-  const allStatuses = ["Available", "On Trip", "In Shop", "Retired"];
-
-  const { type, status, region } = req.query;
-
-  // Apply filters
-  let filteredVehicles = vehicles;
-  if (type) {
-    filteredVehicles = filteredVehicles.filter((v) => v.type === type);
-  }
-  if (status) {
-    filteredVehicles = filteredVehicles.filter((v) => v.status === status);
-  }
-  if (region) {
-    filteredVehicles = filteredVehicles.filter((v) => v.region === region);
-  }
-
-  const activeVehicles = filteredVehicles.filter((v) => v.status !== "Retired");
-  const availableVehicles = filteredVehicles.filter((v) => v.status === "Available");
-  const inMaintenance = filteredVehicles.filter((v) => v.status === "In Shop");
-  
-  const filteredVehicleIds = filteredVehicles.map((v) => v.id);
-  const activeTrips = trips.filter((t) => t.status === "Dispatched" && filteredVehicleIds.includes(t.vehicleId));
-  const pendingTrips = trips.filter((t) => t.status === "Draft" && filteredVehicleIds.includes(t.vehicleId));
-  
-  // Drivers on duty on the active trips of these filtered vehicles
-  const activeTripDriverIds = activeTrips.map((t) => t.driverId);
-  const driversOnDuty = drivers.filter((d) => activeTripDriverIds.includes(d.id));
+  const activeVehicles = vehicles.filter((v) => v.status !== "Retired");
+  const availableVehicles = vehicles.filter((v) => v.status === "Available");
+  const inMaintenance = vehicles.filter((v) => v.status === "In Shop");
+  const activeTrips = trips.filter((t) => t.status === "Dispatched");
+  const pendingTrips = trips.filter((t) => t.status === "Draft");
+  const driversOnDuty = drivers.filter((d) => d.status === "On Trip");
 
   const onTrip = activeVehicles.filter((v) => v.status === "On Trip");
   const fleetUtilization = activeVehicles.length
@@ -131,14 +145,6 @@ app.get("/dashboard", requireLogin, (req, res) => {
       driversOnDuty: driversOnDuty.length,
       fleetUtilization,
     },
-    filters: {
-      types: allTypes,
-      regions: allRegions,
-      statuses: allStatuses,
-      selectedType: type || "",
-      selectedStatus: status || "",
-      selectedRegion: region || "",
-    }
   });
 });
 
@@ -150,7 +156,7 @@ app.get("/vehicles", requireLogin, (req, res) => {
 });
 
 app.post("/vehicles/add", requireLogin, requireRole("fleet_manager"), (req, res) => {
-  const { regNumber, name, type, maxLoad, odometer, acquisitionCost, region } = req.body;
+  const { regNumber, name, type, maxLoad, odometer, acquisitionCost } = req.body;
 
   if (db.get("vehicles").find({ regNumber }).value()) {
     setFlash(req, "danger", "Registration number must be unique.");
@@ -167,54 +173,10 @@ app.post("/vehicles/add", requireLogin, requireRole("fleet_manager"), (req, res)
       odometer: parseFloat(odometer) || 0,
       acquisitionCost: parseFloat(acquisitionCost) || 0,
       status: "Available",
-      region: region || "Unassigned"
     })
     .write();
 
   setFlash(req, "success", "Vehicle registered.");
-  res.redirect("/vehicles");
-});
-
-app.post("/vehicles/:id/edit", requireLogin, requireRole("fleet_manager"), (req, res) => {
-  const { name, type, maxLoad, odometer, acquisitionCost, region } = req.body;
-  const vehicle = db.get("vehicles").find({ id: parseInt(req.params.id) });
-  
-  if (!vehicle.value()) {
-    setFlash(req, "danger", "Vehicle not found.");
-    return res.redirect("/vehicles");
-  }
-
-  vehicle.assign({
-    name,
-    type,
-    maxLoad: parseFloat(maxLoad),
-    odometer: parseFloat(odometer) || 0,
-    acquisitionCost: parseFloat(acquisitionCost) || 0,
-    region: region || "Unassigned"
-  }).write();
-
-  setFlash(req, "success", "Vehicle details updated.");
-  res.redirect("/vehicles");
-});
-
-app.post("/vehicles/:id/retire", requireLogin, requireRole("fleet_manager"), (req, res) => {
-  const vehicle = db.get("vehicles").find({ id: parseInt(req.params.id) });
-  const vVal = vehicle.value();
-
-  if (!vVal) {
-    setFlash(req, "danger", "Vehicle not found.");
-    return res.redirect("/vehicles");
-  }
-
-  if (vVal.status === "On Trip") {
-    setFlash(req, "danger", "Cannot retire a vehicle that is currently On Trip.");
-    return res.redirect("/vehicles");
-  }
-
-  const newStatus = vVal.status === "Retired" ? "Available" : "Retired";
-  vehicle.assign({ status: newStatus }).write();
-
-  setFlash(req, "success", `Vehicle status updated to ${newStatus}.`);
   res.redirect("/vehicles");
 });
 
@@ -242,57 +204,14 @@ app.post("/drivers/add", requireLogin, requireRole("fleet_manager", "safety_offi
       name,
       licenseNumber,
       licenseCategory,
-      licenseExpiry, // stored as "YYYY-MM-DD" string
+      licenseExpiry, // stored as "YYYY-MM-DD" string, compares fine lexically
       contactNumber,
       safetyScore: parseInt(safetyScore) || 100,
       status: "Available",
     })
     .write();
 
-  setFlash(req, "success", "Driver added successfully.");
-  res.redirect("/drivers");
-});
-
-app.post("/drivers/:id/edit", requireLogin, requireRole("fleet_manager", "safety_officer"), (req, res) => {
-  const { name, licenseNumber, licenseCategory, licenseExpiry, contactNumber, safetyScore } = req.body;
-  const driver = db.get("drivers").find({ id: parseInt(req.params.id) });
-
-  if (!driver.value()) {
-    setFlash(req, "danger", "Driver not found.");
-    return res.redirect("/drivers");
-  }
-
-  driver.assign({
-    name,
-    licenseNumber,
-    licenseCategory,
-    licenseExpiry,
-    contactNumber,
-    safetyScore: parseInt(safetyScore) || 100
-  }).write();
-
-  setFlash(req, "success", "Driver details updated.");
-  res.redirect("/drivers");
-});
-
-app.post("/drivers/:id/suspend", requireLogin, requireRole("fleet_manager", "safety_officer"), (req, res) => {
-  const driver = db.get("drivers").find({ id: parseInt(req.params.id) });
-  const dVal = driver.value();
-
-  if (!dVal) {
-    setFlash(req, "danger", "Driver not found.");
-    return res.redirect("/drivers");
-  }
-
-  if (dVal.status === "On Trip") {
-    setFlash(req, "danger", "Cannot suspend a driver who is currently On Trip.");
-    return res.redirect("/drivers");
-  }
-
-  const newStatus = dVal.status === "Suspended" ? "Available" : "Suspended";
-  driver.assign({ status: newStatus }).write();
-
-  setFlash(req, "success", `Driver is now ${newStatus}.`);
+  setFlash(req, "success", "Driver added.");
   res.redirect("/drivers");
 });
 
