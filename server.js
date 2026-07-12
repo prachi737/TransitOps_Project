@@ -123,17 +123,69 @@ app.get("/dashboard", requireLogin, (req, res) => {
   const drivers = db.get("drivers").value();
   const trips = db.get("trips").value();
 
-  const activeVehicles = vehicles.filter((v) => v.status !== "Retired");
-  const availableVehicles = vehicles.filter((v) => v.status === "Available");
-  const inMaintenance = vehicles.filter((v) => v.status === "In Shop");
-  const activeTrips = trips.filter((t) => t.status === "Dispatched");
-  const pendingTrips = trips.filter((t) => t.status === "Draft");
-  const driversOnDuty = drivers.filter((d) => d.status === "On Trip");
+  const allTypes = [...new Set(vehicles.map((v) => v.type).filter(Boolean))];
+  const allRegions = [...new Set(vehicles.map((v) => v.region).filter(Boolean))];
+  const allStatuses = ["Available", "On Trip", "In Shop", "Retired"];
+  const { type, status, region } = req.query;
+
+  let filteredVehicles = vehicles;
+  if (type) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.type === type);
+  if (status) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.status === status);
+  if (region) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.region === region);
+
+  const activeVehicles = filteredVehicles.filter((v) => v.status !== "Retired");
+  const availableVehicles = filteredVehicles.filter((v) => v.status === "Available");
+  const inMaintenance = filteredVehicles.filter((v) => v.status === "In Shop");
+  const filteredVehicleIds = filteredVehicles.map((vehicle) => vehicle.id);
+  const activeTrips = trips.filter((trip) => trip.status === "Dispatched" && filteredVehicleIds.includes(trip.vehicleId));
+  const pendingTrips = trips.filter((trip) => trip.status === "Draft" && filteredVehicleIds.includes(trip.vehicleId));
+  const activeTripDriverIds = activeTrips.map((trip) => trip.driverId);
+  const driversOnDuty = drivers.filter((driver) => activeTripDriverIds.includes(driver.id));
 
   const onTrip = activeVehicles.filter((v) => v.status === "On Trip");
   const fleetUtilization = activeVehicles.length
     ? Math.round((onTrip.length / activeVehicles.length) * 1000) / 10
     : 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  const warningDate = thirtyDaysFromNow.toISOString().slice(0, 10);
+  const expiredLicenses = drivers.filter((driver) => driver.licenseExpiry && driver.licenseExpiry < today);
+  const expiringLicenses = drivers.filter(
+    (driver) => driver.licenseExpiry && driver.licenseExpiry >= today && driver.licenseExpiry <= warningDate
+  );
+
+  const attentionItems = [
+    ...expiredLicenses.map((driver) => ({
+      level: "danger",
+      icon: "bi-person-x-fill",
+      title: "Expired driver license",
+      detail: `${driver.name}'s license expired on ${driver.licenseExpiry}.`,
+      href: "/drivers",
+    })),
+    ...expiringLicenses.map((driver) => ({
+      level: "warning",
+      icon: "bi-calendar-event-fill",
+      title: "License expiring soon",
+      detail: `${driver.name}'s license expires on ${driver.licenseExpiry}.`,
+      href: "/drivers",
+    })),
+    ...inMaintenance.map((vehicle) => ({
+      level: "warning",
+      icon: "bi-tools",
+      title: "Vehicle in maintenance",
+      detail: `${vehicle.regNumber} — ${vehicle.name} is currently in the workshop.`,
+      href: "/maintenance",
+    })),
+    ...pendingTrips.map((trip) => ({
+      level: "info",
+      icon: "bi-hourglass-split",
+      title: "Trip awaiting dispatch",
+      detail: `${trip.source} to ${trip.destination} is still a draft.`,
+      href: "/trips",
+    })),
+  ];
 
   res.render("dashboard", {
     kpis: {
@@ -144,6 +196,24 @@ app.get("/dashboard", requireLogin, (req, res) => {
       pendingTrips: pendingTrips.length,
       driversOnDuty: driversOnDuty.length,
       fleetUtilization,
+    },
+    chartData: {
+      labels: ["Available", "On Trip", "In Shop", "Retired"],
+      values: [
+        availableVehicles.length,
+        onTrip.length,
+        inMaintenance.length,
+        filteredVehicles.filter((v) => v.status === "Retired").length,
+      ],
+    },
+    attentionItems,
+    filters: {
+      types: allTypes,
+      regions: allRegions,
+      statuses: allStatuses,
+      selectedType: type || "",
+      selectedStatus: status || "",
+      selectedRegion: region || "",
     },
   });
 });
