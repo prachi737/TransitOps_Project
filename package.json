@@ -1,17 +1,19 @@
 {
   "name": "transitops-js",
-  "version": "1.0.0",
-  "description": "TransitOps - Smart Transport Operations Platform (Node.js/Express version)",
+  "version": "2.0.0",
+  "description": "TransitOps - Smart Transport Operations Platform (Node.js/Express/MySQL version)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "db:init": "mysql -u root -p < schema.sql"
   },
   "dependencies": {
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "ejs": "^3.1.10",
     "bcryptjs": "^2.4.3",
-    "lowdb": "^1.0.0",
+    "mysql2": "^3.11.0",
+    "dotenv": "^16.4.5",
     "body-parser": "^1.20.2"
   }
 }

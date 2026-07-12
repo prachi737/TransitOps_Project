@@ -1,25 +1,90 @@
-# TransitOps — Starter Project (Node.js / Express / EJS version)
+# TransitOps — Node.js / Express / EJS / MySQL
 
-Same TransitOps app, built with plain JavaScript instead of Python. Runs
-end-to-end already: login → dashboard → vehicles → drivers → trips →
-maintenance → fuel/expenses → reports/CSV export, with the mandatory
-business rules wired in.
+Same TransitOps app, now backed by **MySQL** instead of the `lowdb`
+JSON file, so it can run against a real shared database server, handle
+concurrent users safely, and scale past what a single JSON file could
+reasonably support.
 
-**No SQL database required** — data is stored in `data/db.json` (a plain
-JSON file) using a tiny library called `lowdb`. It behaves like an array of
-JavaScript objects, so if you know `.filter()`, `.find()`, and `.push()`,
-you already know how to work with it.
+## 1. What changed from the lowdb version
 
-## 1. Setup (5 minutes)
+- **Storage**: `data/db.json` → MySQL tables (`schema.sql`), one table
+  per collection (`users`, `vehicles`, `drivers`, `trips`,
+  `maintenance_logs`, `fuel_logs`, `expenses`), with foreign keys and
+  indexes on every column the app filters or joins on
+  (`status`, `vehicle_id`, `driver_id`, `license_expiry`, etc).
+- **Connections**: `db.js` now opens a `mysql2` **connection pool**
+  (default 10 connections, configurable via `DB_POOL_SIZE`) instead of
+  reading/writing one file. Each request borrows a connection and
+  returns it, so many requests can hit the database at once without
+  serializing on file I/O.
+- **Concurrency safety**: the multi-step business rules (dispatch,
+  complete, cancel a trip; open/close maintenance) now run inside real
+  SQL transactions with `SELECT ... FOR UPDATE` row locks. In the old
+  version, two people clicking "Dispatch" on the same vehicle at the
+  same moment could both succeed. Now the second one waits for the
+  first transaction to commit and then correctly sees the vehicle as
+  already `On Trip`.
+- **Uniqueness**: registration numbers, license numbers, and emails are
+  enforced with MySQL `UNIQUE` constraints rather than a
+  check-then-insert in JS, closing the same kind of race condition.
+- **Reports**: fuel efficiency / operational cost / revenue / ROI are
+  computed with SQL `SUM()`/`GROUP BY` aggregation instead of loading
+  every trip, fuel log, maintenance log, and expense into Node and
+  reducing over them — so report cost grows with query complexity, not
+  with how much historical data has piled up.
+- **IDs**: MySQL `AUTO_INCREMENT` replaces the hand-rolled `nextId()`
+  counters.
+
+Business logic and rules are unchanged: retired/in-shop vehicles never
+show for dispatch, expired-license/suspended drivers never show for
+dispatch, cargo weight is checked against max load, dispatch/complete/
+cancel/maintenance flip status the same way, and the same fields flow
+into the EJS views.
+
+> **Note**: only `server.js`, `db.js`, `package.json`, and this README
+> were regenerated here — the `views/*.ejs` templates from your project
+> weren't part of this upload, so they're untouched. The data shapes
+> passed into `res.render(...)` were kept identical (same field names:
+> `regNumber`, `licenseExpiry`, `trip.vehicle.regNumber`, etc.) so your
+> existing templates should keep working without changes.
+
+## 2. Setup
+
+### Install MySQL
+
+Any MySQL 8+ (or MariaDB 10.5+) server works — local install, Docker,
+or a managed service (PlanetScale, RDS, Cloud SQL, etc).
 
 ```bash
-# 1. Unzip the project, then inside the folder:
+# Docker option:
+docker run --name transitops-mysql -e MYSQL_ROOT_PASSWORD=yourpassword -p 3306:3306 -d mysql:8
+```
+
+### Create the schema
+
+```bash
+mysql -u root -p < schema.sql
+```
+
+This creates the `transitops` database and all tables, with indexes
+and foreign keys already in place.
+
+### Configure the app
+
+```bash
+cp .env.example .env
+# edit .env with your DB_HOST / DB_USER / DB_PASSWORD
+```
+
+### Install and run
+
+```bash
 npm install
 node server.js
 ```
 
-Open http://localhost:3000 — it auto-creates `data/db.json` and seeds
-4 demo logins (password for all: `password123`):
+Open http://localhost:3000 — on first run it seeds 4 demo logins
+(password for all: `password123`):
 
 | Email | Role |
 |---|---|
@@ -28,97 +93,48 @@ Open http://localhost:3000 — it auto-creates `data/db.json` and seeds
 | safety@transitops.com | Safety Officer |
 | finance@transitops.com | Financial Analyst |
 
-Push this to a shared GitHub repo immediately so all 4 of you can pull it
-and work in parallel branches.
-
-## 2. What's already built
-
-- Auth + RBAC via `express-session` (a couple of routes are role-locked as
-  a demo — e.g. only Fleet Manager/Safety Officer can add vehicles/drivers)
-- Dashboard KPIs (active/available vehicles, trips, drivers on duty, fleet utilization %)
-- Vehicle Registry (add + list; unique registration number enforced)
-- Driver Management (add + list; expired licenses highlighted in red)
-- Trip Management with **all mandatory business rules**:
-  - Retired/In Shop vehicles never shown for dispatch
-  - Expired-license or Suspended drivers never shown for dispatch
-  - Cargo weight validated against vehicle max load
-  - Dispatch → both vehicle & driver become "On Trip"
-  - Complete → both become "Available" again, fuel log auto-created
-  - Cancel → restores Available
-- Maintenance workflow (create → vehicle "In Shop"; close → vehicle "Available")
-- Fuel logs + other Expenses
-- Reports: Fuel Efficiency, Operational Cost, ROI, Fleet Utilization + CSV export
-
 ## 3. Project structure
 
 ```
 transitops-js/
-├── server.js          # all routes + business logic (the main file)
-├── db.js              # sets up the JSON "database" + seed data
-├── data/db.json        # auto-created on first run, holds all your data
-├── views/              # EJS templates (like HTML with <% %> for logic)
-│   ├── partials/header.ejs, footer.ejs   # navbar + page wrapper
-│   ├── login.ejs, dashboard.ejs, vehicles.ejs, drivers.ejs,
-│   │   trips.ejs, maintenance.ejs, fuel_expenses.ejs, reports.ejs
+├── schema.sql          # MySQL DDL: tables, indexes, foreign keys
+├── server.js           # all routes + business logic
+├── db.js               # MySQL pool, query/transaction helpers, seed data
+├── .env.example         # copy to .env and fill in DB credentials
+├── views/               # EJS templates (unchanged — bring your own from the original project)
 └── package.json
 ```
 
-If you've written HTML before, EJS will feel familiar: `<%= value %>` prints
-a value, `<% if (...) { %> ... <% } %>` is a normal if-statement, just inside
-the HTML.
+## 4. Scaling this further
 
-## 4. Suggested 4-person split (parallel work, minimal file conflicts)
+The current setup is enough for a small team demo running one Node
+process against one MySQL instance. If you outgrow that:
 
-**Person A — Auth, Dashboard & Polish**
-- Improve RBAC (hide nav links a user's role can't use, not just block the route)
-- Add dashboard filters (vehicle type / status / region)
-- Overall visual polish, favicon, loading states
-- Own files: `views/dashboard.ejs`, `views/partials/*`, `server.js` (auth section only)
+- **Multiple app instances**: this app is already stateless-per-request
+  except for `express-session`, which defaults to in-memory storage —
+  that only works with a single process. Before running more than one
+  Node instance (or a load balancer), swap in a shared session store
+  (`connect-redis` or `express-mysql-session`) so logins survive across
+  instances.
+- **Read load**: if reporting/dashboard reads start competing with
+  write traffic, point read-heavy routes at a MySQL read replica.
+- **Pool sizing**: `DB_POOL_SIZE` in `.env` controls how many
+  connections each Node process opens. Size it against your MySQL
+  server's `max_connections` divided by the number of app instances
+  you run.
+- **Query patterns**: everything already goes through parameterized
+  queries (no string-built SQL) and the indexes in `schema.sql` cover
+  every `WHERE`/`JOIN` column currently used — if you add new filters
+  or reports, add matching indexes.
 
-**Person B — Vehicles & Drivers**
-- Add Edit/Retire buttons for vehicles (currently only Add + List)
-- Add Suspend/Reinstate for drivers
-- Add search/sort/filter on both tables (bonus feature)
-- Own files: `views/vehicles.ejs`, `views/drivers.ejs`, `server.js` (vehicle/driver routes)
+## 5. Notes / things to double check against the brief
 
-**Person C — Trips & Maintenance**
-- Test every business rule from the "Example Workflow" in the brief step by step
-- Add better validation error messages
-- Add an email-reminder stub for expiring licenses (bonus — can just `console.log`)
-- Own files: `views/trips.ejs`, `views/maintenance.ejs`, `server.js` (trip/maintenance routes)
-
-**Person D — Fuel/Expenses, Reports & Analytics**
-- Add a chart (Chart.js via CDN, no build step) for fleet utilization or cost breakdown
-- Double-check ROI/fuel-efficiency formulas match the brief
-- Try adding PDF export (bonus — CSV already works) with a library like `pdfkit`
-- Own files: `views/fuel_expenses.ejs`, `views/reports.ejs`, `server.js` (reports section)
-
-Everyone touches `server.js` and `db.js`, so **commit and pull often** —
-routes are additive, so merge conflicts should be small if each person stays
-in their section.
-
-## 5. Suggested 8-hour timeline
-
-| Time | Milestone |
-|---|---|
-| 0:00–0:30 | Everyone: clone repo, `npm install`, run app locally, agree on git branches |
-| 0:30–3:00 | Build in parallel per the split above |
-| 3:00–3:30 | Merge everyone's branches into `main`, fix conflicts |
-| 3:30–5:30 | Continue features + bonus items |
-| 5:30–6:30 | Full run-through of the "Example Workflow" from the brief as a team, fix bugs |
-| 6:30–7:15 | Polish UI, add validations, seed a few demo records |
-| 7:15–8:00 | Prepare demo script + slides, rehearse who presents which module |
-
-## 6. Notes / things to double check against the brief
-
-- The brief's ROI formula needs a "Revenue" figure, which the raw brief
-  doesn't define a source for — this starter adds an optional `revenue`
-  field when completing a trip so ROI can be computed. Decide as a team if
-  you want revenue to come from somewhere else (e.g. a per-km rate).
-- "Region" isn't in the current Vehicle model — add a `region` field if you
-  want the dashboard region filter (bonus feature) to be meaningful.
-- `data/db.json` is a single shared file — if you run the app on multiple
-  laptops at once you'll get separate local datasets. For the live demo,
-  run the final app from **one laptop** so everyone sees the same data.
-- Dark mode, document management, and email reminders are bonus features
-  not yet implemented — tackle only if core requirements are solid and demoed first.
+- The brief's ROI formula needs a "Revenue" figure — this app records
+  an optional `revenue` value when a trip is completed so ROI can be
+  computed. Decide as a team if you'd rather source revenue elsewhere
+  (e.g. a per-km rate).
+- `vehicles.region` exists as a column if you want the dashboard region
+  filter (bonus feature) to be meaningful — it's not populated by the
+  current forms.
+- Dark mode, document management, and email reminders are bonus
+  features not yet implemented.
