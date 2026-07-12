@@ -20,6 +20,25 @@
   </div>
 </div>
 
+<!-- Quick Actions -->
+<div class="quick-actions mb-4">
+  <span class="quick-actions-label"><i class="bi bi-lightning-charge-fill"></i> Quick actions</span>
+  <div class="d-flex flex-wrap gap-2">
+    <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'driver' || currentUser.role === 'safety_officer') { %>
+      <a href="/trips" class="btn btn-primary-custom btn-sm"><i class="bi bi-send-plus me-1"></i> Manage Trips</a>
+    <% } %>
+    <% if (currentUser.role === 'fleet_manager') { %>
+      <a href="/vehicles" class="btn btn-secondary-custom btn-sm"><i class="bi bi-car-front-fill me-1"></i> Register Vehicle</a>
+    <% } %>
+    <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') { %>
+      <a href="/maintenance" class="btn btn-secondary-custom btn-sm"><i class="bi bi-tools me-1"></i> Maintenance</a>
+    <% } %>
+    <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'financial_analyst') { %>
+      <a href="/reports" class="btn btn-secondary-custom btn-sm"><i class="bi bi-bar-chart-line me-1"></i> View Reports</a>
+    <% } %>
+  </div>
+</div>
+
 <!-- Filters Panel -->
 <div class="filter-panel mb-4">
   <form method="GET" action="/dashboard" class="row g-3">
@@ -106,5 +125,78 @@
     </div>
   </div>
 </div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card card-custom h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pie-chart-fill text-info me-2"></i>Fleet status overview</span>
+        <span class="small text-muted">Current filtered fleet</span>
+      </div>
+      <div class="card-body chart-wrapper">
+        <canvas id="fleetStatusChart" aria-label="Fleet status overview chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card card-custom h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-bell-fill text-warning me-2"></i>Attention required</span>
+        <% if (attentionItems.length) { %><span class="badge bg-danger rounded-pill"><%= attentionItems.length %></span><% } %>
+      </div>
+      <div class="card-body py-2">
+        <% if (attentionItems.length === 0) { %>
+          <div class="dashboard-empty-state">
+            <i class="bi bi-check2-circle"></i>
+            <p class="mb-0">Everything is running smoothly.</p>
+          </div>
+        <% } else { %>
+          <% attentionItems.slice(0, 4).forEach(item => { %>
+            <a href="<%= item.href %>" class="attention-item attention-<%= item.level %>">
+              <i class="bi <%= item.icon %>"></i>
+              <span><strong><%= item.title %></strong><small><%= item.detail %></small></span>
+              <i class="bi bi-chevron-right attention-chevron"></i>
+            </a>
+          <% }); %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  const fleetChart = document.getElementById('fleetStatusChart');
+  let fleetStatusChart;
+  function renderFleetChart() {
+    if (fleetStatusChart) fleetStatusChart.destroy();
+    const isLightTheme = document.documentElement.dataset.theme === 'light';
+    fleetStatusChart = new Chart(fleetChart, {
+      type: 'doughnut',
+      data: {
+        labels: <%- JSON.stringify(chartData.labels) %>,
+        datasets: [{
+          data: <%- JSON.stringify(chartData.values) %>,
+          backgroundColor: ['#10b981', '#06b6d4', '#f59e0b', '#f43f5e'],
+          borderColor: isLightTheme ? '#ffffff' : '#131b2e',
+          borderWidth: 5,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: isLightTheme ? '#334155' : '#cbd5e1', padding: 18, usePointStyle: true } },
+          tooltip: { displayColors: false }
+        }
+      }
+    });
+  }
+  renderFleetChart();
+  window.addEventListener('transitops-theme-change', renderFleetChart);
+</script>
 
 <%- include('partials/footer') %>
