@@ -123,12 +123,24 @@ app.get("/dashboard", requireLogin, (req, res) => {
   const drivers = db.get("drivers").value();
   const trips = db.get("trips").value();
 
-  const activeVehicles = vehicles.filter((v) => v.status !== "Retired");
-  const availableVehicles = vehicles.filter((v) => v.status === "Available");
-  const inMaintenance = vehicles.filter((v) => v.status === "In Shop");
-  const activeTrips = trips.filter((t) => t.status === "Dispatched");
-  const pendingTrips = trips.filter((t) => t.status === "Draft");
-  const driversOnDuty = drivers.filter((d) => d.status === "On Trip");
+  const allTypes = [...new Set(vehicles.map((v) => v.type).filter(Boolean))];
+  const allRegions = [...new Set(vehicles.map((v) => v.region).filter(Boolean))];
+  const allStatuses = ["Available", "On Trip", "In Shop", "Retired"];
+  const { type, status, region } = req.query;
+
+  let filteredVehicles = vehicles;
+  if (type) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.type === type);
+  if (status) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.status === status);
+  if (region) filteredVehicles = filteredVehicles.filter((vehicle) => vehicle.region === region);
+
+  const activeVehicles = filteredVehicles.filter((v) => v.status !== "Retired");
+  const availableVehicles = filteredVehicles.filter((v) => v.status === "Available");
+  const inMaintenance = filteredVehicles.filter((v) => v.status === "In Shop");
+  const filteredVehicleIds = filteredVehicles.map((vehicle) => vehicle.id);
+  const activeTrips = trips.filter((trip) => trip.status === "Dispatched" && filteredVehicleIds.includes(trip.vehicleId));
+  const pendingTrips = trips.filter((trip) => trip.status === "Draft" && filteredVehicleIds.includes(trip.vehicleId));
+  const activeTripDriverIds = activeTrips.map((trip) => trip.driverId);
+  const driversOnDuty = drivers.filter((driver) => activeTripDriverIds.includes(driver.id));
 
   const onTrip = activeVehicles.filter((v) => v.status === "On Trip");
   const fleetUtilization = activeVehicles.length
@@ -185,8 +197,6 @@ app.get("/dashboard", requireLogin, (req, res) => {
       driversOnDuty: driversOnDuty.length,
       fleetUtilization,
     },
-<<<<<<< Updated upstream
-=======
     chartData: {
       labels: ["Available", "On Trip", "In Shop", "Retired"],
       values: [
@@ -204,8 +214,7 @@ app.get("/dashboard", requireLogin, (req, res) => {
       selectedType: type || "",
       selectedStatus: status || "",
       selectedRegion: region || "",
-    }
->>>>>>> Stashed changes
+    },
   });
 });
 
