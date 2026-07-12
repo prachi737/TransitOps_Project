@@ -1,0 +1,60 @@
+<%- include('partials/header') %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>Maintenance</h3>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMaintModal">+ New Maintenance</button>
+</div>
+
+<div class="table-responsive">
+<table class="table table-striped bg-white shadow-sm">
+  <thead>
+    <tr><th>#</th><th>Vehicle</th><th>Description</th><th>Cost</th><th>Date</th><th>Status</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    <% logs.forEach(m => { %>
+    <tr>
+      <td><%= m.id %></td>
+      <td><%= m.vehicle ? m.vehicle.regNumber : '—' %></td>
+      <td><%= m.description %></td>
+      <td><%= m.cost %></td>
+      <td><%= m.date %></td>
+      <td><span class="badge bg-secondary"><%= m.status %></span></td>
+      <td>
+        <% if (m.status === "Active") { %>
+        <form method="POST" action="/maintenance/<%= m.id %>/close">
+          <button class="btn btn-sm btn-success">Close (restore vehicle)</button>
+        </form>
+        <% } %>
+      </td>
+    </tr>
+    <% }); %>
+  </tbody>
+</table>
+</div>
+
+<!-- Add Maintenance Modal -->
+<div class="modal fade" id="addMaintModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/maintenance/add">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">New Maintenance Record</h5></div>
+        <div class="modal-body">
+          <div class="mb-2"><label class="form-label">Vehicle</label>
+            <select name="vehicleId" class="form-select" required>
+              <% vehicles.forEach(v => { %>
+              <option value="<%= v.id %>"><%= v.regNumber %> — <%= v.name %> (<%= v.status %>)</option>
+              <% }); %>
+            </select>
+          </div>
+          <div class="mb-2"><label class="form-label">Description</label>
+            <input name="description" class="form-control" placeholder="Oil Change, Brake check..." required></div>
+          <div class="mb-2"><label class="form-label">Cost</label>
+            <input name="cost" type="number" step="0.01" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Create (marks vehicle In Shop)</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<%- include('partials/footer') %>

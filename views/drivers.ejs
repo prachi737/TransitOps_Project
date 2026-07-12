@@ -1,0 +1,257 @@
+<%- include('partials/header') %>
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+  <div>
+    <h1 class="page-title mb-1">Driver Management</h1>
+    <p class="text-muted mb-0">Track compliance, license validity, and safety performance</p>
+  </div>
+  
+  <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') { %>
+    <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addDriverModal">
+      <i class="bi bi-person-plus me-1"></i> Add Driver Profile
+    </button>
+  <% } %>
+</div>
+
+<!-- Search & Filtering Section -->
+<div class="filter-panel mb-4">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label text-muted small fw-semibold">Search Drivers</label>
+      <div class="input-group">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="driverSearch" class="form-control form-control-custom" placeholder="Search by name, license #, contact..." onkeyup="filterDriversTable()">
+      </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6">
+      <label class="form-label text-muted small fw-semibold">Filter by Status</label>
+      <select id="driverStatusFilter" class="form-select form-select-custom" onchange="filterDriversTable()">
+        <option value="">All Statuses</option>
+        <option value="Available">Available</option>
+        <option value="On Trip">On Trip</option>
+        <option value="Off Duty">Off Duty</option>
+        <option value="Suspended">Suspended</option>
+      </select>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+      <label class="form-label text-muted small fw-semibold">License Expiry</label>
+      <select id="licenseExpiryFilter" class="form-select form-select-custom" onchange="filterDriversTable()">
+        <option value="">All Drivers</option>
+        <option value="expired">Expired License</option>
+        <option value="valid">Valid License</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-custom-container">
+  <table class="table table-custom" id="driversTable">
+    <thead>
+      <tr>
+        <th>Driver Name</th>
+        <th>License Number</th>
+        <th>Category</th>
+        <th>License Expiry</th>
+        <th>Contact Number</th>
+        <th class="text-center">Safety Score</th>
+        <th>Status</th>
+        <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') { %>
+          <th class="text-center">Actions</th>
+        <% } %>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (drivers.length === 0) { %>
+        <tr>
+          <td colspan="<%= (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') ? 8 : 7 %>" class="text-center py-4 text-muted">
+            <i class="bi bi-person-fill-slash fs-2 d-block mb-2"></i> No drivers registered yet.
+          </td>
+        </tr>
+      <% } %>
+      <% drivers.forEach(d => { %>
+        <% const isExpired = d.licenseExpiry < today; %>
+        <tr data-status="<%= d.status %>" data-expired="<%= isExpired ? 'expired' : 'valid' %>" class="<%= isExpired ? 'table-danger-custom' : '' %>" style="<%= isExpired ? 'background-color: rgba(244, 63, 94, 0.05) !important;' : '' %>">
+          <td>
+            <div class="d-flex align-items-center">
+              <div>
+                <div class="fw-semibold text-white"><%= d.name %></div>
+                <% if (isExpired) { %>
+                  <span class="text-danger small"><i class="bi bi-exclamation-triangle-fill"></i> License Expired</span>
+                <% } %>
+              </div>
+            </div>
+          </td>
+          <td class="text-white"><%= d.licenseNumber %></td>
+          <td><span class="badge bg-secondary-custom"><%= d.licenseCategory || '—' %></span></td>
+          <td class="<%= isExpired ? 'text-danger fw-bold' : 'text-white' %>">
+            <i class="bi bi-calendar-event me-1"></i><%= d.licenseExpiry %>
+          </td>
+          <td class="text-muted"><%= d.contactNumber || '—' %></td>
+          <td class="text-center">
+            <% 
+              let scoreColor = 'text-success';
+              if (d.safetyScore < 60) scoreColor = 'text-danger';
+              else if (d.safetyScore < 85) scoreColor = 'text-warning';
+            %>
+            <span class="fw-bold <%= scoreColor %>"><%= d.safetyScore %> / 100</span>
+          </td>
+          <td>
+            <% 
+              let badgeClass = 'badge-available';
+              if (d.status === 'On Trip') badgeClass = 'badge-ontrip';
+              else if (d.status === 'Suspended') badgeClass = 'badge-suspended';
+              else if (d.status === 'Off Duty') badgeClass = 'badge-offduty';
+            %>
+            <span class="badge-custom <%= badgeClass %>"><%= d.status %></span>
+          </td>
+          <% if (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') { %>
+            <td class="text-center">
+              <div class="d-inline-flex gap-2">
+                <button class="btn btn-sm btn-outline-custom" data-bs-toggle="modal" data-bs-target="#editDriverModal<%= d.id %>">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </button>
+                <form method="POST" action="/drivers/<%= d.id %>/suspend" style="display:inline">
+                  <button type="submit" class="btn btn-sm <%= d.status === 'Suspended' ? 'btn-outline-success' : 'btn-outline-danger' %>">
+                    <% if (d.status === 'Suspended') { %>
+                      <i class="bi bi-check-circle"></i> Reinstate
+                    <% } else { %>
+                      <i class="bi bi-slash-circle"></i> Suspend
+                    <% } %>
+                  </button>
+                </form>
+              </div>
+
+              <!-- Edit Driver Modal -->
+              <div class="modal fade modal-custom" id="editDriverModal<%= d.id %>" tabindex="-1">
+                <div class="modal-dialog">
+                  <form method="POST" action="/drivers/<%= d.id %>/edit">
+                    <div class="modal-content text-start">
+                      <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Driver: <%= d.name %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Name</label>
+                          <input name="name" class="form-control form-control-custom" value="<%= d.name %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">License Number</label>
+                          <input name="licenseNumber" class="form-control form-control-custom" value="<%= d.licenseNumber %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">License Category</label>
+                          <input name="licenseCategory" class="form-control form-control-custom" value="<%= d.licenseCategory %>" placeholder="LMV, HMV etc.">
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">License Expiry Date</label>
+                          <input name="licenseExpiry" type="date" class="form-control form-control-custom" value="<%= d.licenseExpiry %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Contact Number</label>
+                          <input name="contactNumber" class="form-control form-control-custom" value="<%= d.contactNumber %>">
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Safety Score (0-100)</label>
+                          <input name="safetyScore" type="number" min="0" max="100" class="form-control form-control-custom" value="<%= d.safetyScore %>">
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </td>
+          <% } %>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+
+<% if (currentUser.role === 'fleet_manager' || currentUser.role === 'safety_officer') { %>
+  <!-- Add Driver Modal -->
+  <div class="modal fade modal-custom" id="addDriverModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form method="POST" action="/drivers/add">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add Driver Profile</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-muted small">Full Name</label>
+              <input name="name" class="form-control form-control-custom" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">License Number</label>
+              <input name="licenseNumber" class="form-control form-control-custom" placeholder="e.g. DL-1234567890" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">License Category</label>
+              <input name="licenseCategory" class="form-control form-control-custom" placeholder="e.g. LMV, HMV, Heavy Rigid" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">License Expiry Date</label>
+              <input name="licenseExpiry" type="date" class="form-control form-control-custom" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Contact Number</label>
+              <input name="contactNumber" class="form-control form-control-custom" placeholder="e.g. +1 555-0199">
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Safety Score (0-100)</label>
+              <input name="safetyScore" type="number" min="0" max="100" class="form-control form-control-custom" value="100">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary-custom" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary-custom">Add Profile</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<script>
+  function filterDriversTable() {
+    const searchVal = document.getElementById('driverSearch').value.toLowerCase();
+    const statusVal = document.getElementById('driverStatusFilter').value;
+    const expiryVal = document.getElementById('licenseExpiryFilter').value;
+    
+    const rows = document.querySelectorAll('#driversTable tbody tr');
+    
+    rows.forEach(row => {
+      // Skip "No drivers" row
+      if (row.cells.length === 1 && row.cells[0].colSpan > 1) return;
+      
+      const name = row.cells[0].textContent.toLowerCase();
+      const lic = row.cells[1].textContent.toLowerCase();
+      const contact = row.cells[4].textContent.toLowerCase();
+      
+      const status = row.getAttribute('data-status');
+      const isExpired = row.getAttribute('data-expired');
+      
+      const matchesSearch = name.includes(searchVal) || lic.includes(searchVal) || contact.includes(searchVal);
+      const matchesStatus = !statusVal || status === statusVal;
+      const matchesExpiry = !expiryVal || isExpired === expiryVal;
+      
+      if (matchesSearch && matchesStatus && matchesExpiry) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+</script>
+
+<%- include('partials/footer') %>
+

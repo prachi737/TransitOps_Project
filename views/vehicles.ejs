@@ -1,0 +1,260 @@
+<%- include('partials/header') %>
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+  <div>
+    <h1 class="page-title mb-1">Vehicle Registry</h1>
+    <p class="text-muted mb-0">Master database of all fleet transport assets</p>
+  </div>
+  
+  <% if (currentUser.role === 'fleet_manager') { %>
+    <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+      <i class="bi bi-plus-circle me-1"></i> Register Vehicle
+    </button>
+  <% } %>
+</div>
+
+<!-- Search & Filtering Section -->
+<div class="filter-panel mb-4">
+  <div class="row g-3">
+    <div class="col-md-5">
+      <label class="form-label text-muted small fw-semibold">Search Assets</label>
+      <div class="input-group">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="vehicleSearch" class="form-control form-control-custom" placeholder="Search by name, model, reg #..." onkeyup="filterVehiclesTable()">
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <label class="form-label text-muted small fw-semibold">Filter by Type</label>
+      <select id="typeFilter" class="form-select form-select-custom" onchange="filterVehiclesTable()">
+        <option value="">All Types</option>
+        <% const types = [...new Set(vehicles.map(v => v.type).filter(Boolean))]; %>
+        <% types.forEach(t => { %>
+          <option value="<%= t.toLowerCase() %>"><%= t.charAt(0).toUpperCase() + t.slice(1) %></option>
+        <% }); %>
+      </select>
+    </div>
+
+    <div class="col-md-2 col-sm-6">
+      <label class="form-label text-muted small fw-semibold">Filter by Status</label>
+      <select id="statusFilter" class="form-select form-select-custom" onchange="filterVehiclesTable()">
+        <option value="">All Statuses</option>
+        <option value="Available">Available</option>
+        <option value="On Trip">On Trip</option>
+        <option value="In Shop">In Shop</option>
+        <option value="Retired">Retired</option>
+      </select>
+    </div>
+
+    <div class="col-md-2 col-sm-6">
+      <label class="form-label text-muted small fw-semibold">Filter by Region</label>
+      <select id="regionFilter" class="form-select form-select-custom" onchange="filterVehiclesTable()">
+        <option value="">All Regions</option>
+        <% const regions = [...new Set(vehicles.map(v => v.region).filter(Boolean))]; %>
+        <% regions.forEach(r => { %>
+          <option value="<%= r.toLowerCase() %>"><%= r %></option>
+        <% }); %>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-custom-container">
+  <table class="table table-custom" id="vehiclesTable">
+    <thead>
+      <tr>
+        <th>Reg Number</th>
+        <th>Vehicle Details</th>
+        <th>Type</th>
+        <th>Region</th>
+        <th class="text-end">Max Load</th>
+        <th class="text-end">Odometer</th>
+        <th class="text-end">Acquisition Cost</th>
+        <th>Status</th>
+        <% if (currentUser.role === 'fleet_manager') { %>
+          <th class="text-center">Actions</th>
+        <% } %>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (vehicles.length === 0) { %>
+        <tr>
+          <td colspan="<%= currentUser.role === 'fleet_manager' ? 9 : 8 %>" class="text-center py-4 text-muted">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i> No vehicles registered yet.
+          </td>
+        </tr>
+      <% } %>
+      <% vehicles.forEach(v => { %>
+        <tr data-type="<%= v.type ? v.type.toLowerCase() : '' %>" data-status="<%= v.status %>" data-region="<%= v.region ? v.region.toLowerCase() : '' %>">
+          <td class="fw-bold text-white"><%= v.regNumber %></td>
+          <td>
+            <div class="fw-semibold text-white"><%= v.name %></div>
+          </td>
+          <td><span class="badge bg-secondary-custom"><%= v.type %></span></td>
+          <td><i class="bi bi-geo-alt-fill text-muted me-1"></i><%= v.region || 'Unassigned' %></td>
+          <td class="text-end text-white"><%= v.maxLoad.toLocaleString() %> kg</td>
+          <td class="text-end text-white"><%= v.odometer.toLocaleString() %> km</td>
+          <td class="text-end text-white">$<%= v.acquisitionCost.toLocaleString() %></td>
+          <td>
+            <% 
+              let badgeClass = 'badge-available';
+              if (v.status === 'On Trip') badgeClass = 'badge-ontrip';
+              else if (v.status === 'In Shop') badgeClass = 'badge-inshop';
+              else if (v.status === 'Retired') badgeClass = 'badge-retired';
+            %>
+            <span class="badge-custom <%= badgeClass %>"><%= v.status %></span>
+          </td>
+          <% if (currentUser.role === 'fleet_manager') { %>
+            <td class="text-center">
+              <div class="d-inline-flex gap-2">
+                <button class="btn btn-sm btn-outline-custom" data-bs-toggle="modal" data-bs-target="#editVehicleModal<%= v.id %>">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </button>
+                <form method="POST" action="/vehicles/<%= v.id %>/retire" style="display:inline">
+                  <button type="submit" class="btn btn-sm <%= v.status === 'Retired' ? 'btn-outline-success' : 'btn-outline-danger' %>">
+                    <% if (v.status === 'Retired') { %>
+                      <i class="bi bi-check-circle"></i> Activate
+                    <% } else { %>
+                      <i class="bi bi-trash"></i> Retire
+                    <% } %>
+                  </button>
+                </form>
+              </div>
+
+              <!-- Edit Vehicle Modal -->
+              <div class="modal fade modal-custom" id="editVehicleModal<%= v.id %>" tabindex="-1">
+                <div class="modal-dialog">
+                  <form method="POST" action="/vehicles/<%= v.id %>/edit">
+                    <div class="modal-content text-start">
+                      <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Vehicle <%= v.regNumber %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Name / Model</label>
+                          <input name="name" class="form-control form-control-custom" value="<%= v.name %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Type</label>
+                          <input name="type" class="form-control form-control-custom" value="<%= v.type %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Region</label>
+                          <input name="region" class="form-control form-control-custom" value="<%= v.region || '' %>" placeholder="e.g. North, South, East, West">
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Max Load Capacity (kg)</label>
+                          <input name="maxLoad" type="number" step="0.01" class="form-control form-control-custom" value="<%= v.maxLoad %>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Odometer (km)</label>
+                          <input name="odometer" type="number" step="0.01" class="form-control form-control-custom" value="<%= v.odometer %>">
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label text-muted small">Acquisition Cost ($)</label>
+                          <input name="acquisitionCost" type="number" step="0.01" class="form-control form-control-custom" value="<%= v.acquisitionCost %>">
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </td>
+          <% } %>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+
+<% if (currentUser.role === 'fleet_manager') { %>
+  <!-- Add Vehicle Modal -->
+  <div class="modal fade modal-custom" id="addVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form method="POST" action="/vehicles/add">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Register Vehicle</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label text-muted small">Registration Number</label>
+              <input name="regNumber" class="form-control form-control-custom" placeholder="e.g. MH-12-AB-1234" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Name / Model</label>
+              <input name="name" class="form-control form-control-custom" placeholder="e.g. Ford Transit, Volvo FH16" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Type</label>
+              <input name="type" class="form-control form-control-custom" placeholder="e.g. Van, Truck, Semi, Pickup" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Region</label>
+              <input name="region" class="form-control form-control-custom" placeholder="e.g. North, South, East, West">
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Max Load Capacity (kg)</label>
+              <input name="maxLoad" type="number" step="0.01" class="form-control form-control-custom" placeholder="e.g. 1500" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Odometer (km)</label>
+              <input name="odometer" type="number" step="0.01" class="form-control form-control-custom" value="0">
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small">Acquisition Cost ($)</label>
+              <input name="acquisitionCost" type="number" step="0.01" class="form-control form-control-custom" value="0">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary-custom" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary-custom">Register Asset</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<script>
+  function filterVehiclesTable() {
+    const searchVal = document.getElementById('vehicleSearch').value.toLowerCase();
+    const typeVal = document.getElementById('typeFilter').value;
+    const statusVal = document.getElementById('statusFilter').value;
+    const regionVal = document.getElementById('regionFilter').value;
+    
+    const rows = document.querySelectorAll('#vehiclesTable tbody tr');
+    
+    rows.forEach(row => {
+      // Skip the "No vehicles" row if visible
+      if (row.cells.length === 1 && row.cells[0].colSpan > 1) return;
+      
+      const reg = row.cells[0].textContent.toLowerCase();
+      const name = row.cells[1].textContent.toLowerCase();
+      const type = row.getAttribute('data-type');
+      const status = row.getAttribute('data-status');
+      const region = row.getAttribute('data-region');
+      
+      const matchesSearch = reg.includes(searchVal) || name.includes(searchVal);
+      const matchesType = !typeVal || type === typeVal;
+      const matchesStatus = !statusVal || status === statusVal;
+      const matchesRegion = !regionVal || region === regionVal;
+      
+      if (matchesSearch && matchesType && matchesStatus && matchesRegion) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+</script>
+
+<%- include('partials/footer') %>
+

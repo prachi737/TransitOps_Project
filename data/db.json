@@ -1,0 +1,58 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "manager@transitops.com",
+      "name": "Fleet Manager",
+      "role": "fleet_manager",
+      "passwordHash": "$2a$10$cOzGP9f4ZFJzEyC3D5SGh.PyEtsvqfO3ZoY8ZnqYVJoBNXax6zfUq"
+    },
+    {
+      "id": 2,
+      "email": "driver@transitops.com",
+      "name": "Driver User",
+      "role": "driver",
+      "passwordHash": "$2a$10$4m5qI/.tkXORTdACE0xtTuXVBEOPPhOyBkiaVavEg4av11W/DYGBe"
+    },
+    {
+      "id": 3,
+      "email": "safety@transitops.com",
+      "name": "Safety Officer",
+      "role": "safety_officer",
+      "passwordHash": "$2a$10$g4IvuenVKg8i6tOiqsSd3.Baaq5kRJ6yYOiqA5CQGmHTqx1zPuDve"
+    },
+    {
+      "id": 4,
+      "email": "finance@transitops.com",
+      "name": "Financial Analyst",
+      "role": "financial_analyst",
+      "passwordHash": "$2a$10$Juqu74rspEuN07Xtsyj.WuXRG4VoF26JscNnSTKPTtiZTqY2HOLpG"
+    }
+  ],
+  "vehicles": [
+    {
+      "id": 1,
+      "regNumber": "i00",
+      "name": "xyz",
+      "type": "van",
+      "maxLoad": 50,
+      "odometer": 0,
+      "acquisitionCost": 0,
+      "status": "Available"
+    }
+  ],
+  "drivers": [],
+  "trips": [],
+  "maintenanceLogs": [],
+  "fuelLogs": [],
+  "expenses": [],
+  "counters": {
+    "users": 4,
+    "vehicles": 1,
+    "drivers": 0,
+    "trips": 0,
+    "maintenanceLogs": 0,
+    "fuelLogs": 0,
+    "expenses": 0
+  }
+}
