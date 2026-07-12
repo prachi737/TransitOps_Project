@@ -92,7 +92,7 @@
             <div class="fw-semibold text-white"><%= v.name %></div>
           </td>
           <td><span class="badge bg-secondary-custom"><%= v.type %></span></td>
-          <td><i class="bi bi-geo-alt-fill text-muted me-1"></i><%= v.region || 'Unassigned' %></td>
+          <td><i class="bi bi-geo-alt-fill text-muted me-1"></i><span class="region-value"><%= v.region || 'Unassigned' %></span></td>
           <td class="text-end text-white"><%= v.maxLoad.toLocaleString() %> kg</td>
           <td class="text-end text-white"><%= v.odometer.toLocaleString() %> km</td>
           <td class="text-end text-white">$<%= v.acquisitionCost.toLocaleString() %></td>
